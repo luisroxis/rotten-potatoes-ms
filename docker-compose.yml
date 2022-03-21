@@ -1,0 +1,82 @@
+version: "3.8"
+volumes:
+  postgres_data:
+  mongo_vol:
+
+networks:
+  net_app:
+    driver: bridge
+  net_db:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:13.4-alpine
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - net_db
+    ports:
+      - "5432:5432"
+
+  mongodb:
+    image: mongo:5.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PWD}
+    volumes:
+      - mongo_vol:/data/db
+    networks:
+        - net_db
+    ports:
+      - "27017:27017"
+ 
+  app-rotten-potatoes:
+    image: luisroxis/rotten_potatoes_ms:${TAG}
+    hostname: app-rotten-potatoes
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    environment:
+      - MOVIE_SERVICE_URI=${MOVIE_SERVICE_URI}
+      - REVIEW_SERVICE_URI=${REVIEW_SERVICE_URI}
+    depends_on:
+      - app-review
+      - app-movie
+    networks:
+      - net_app
+    ports:
+      - "8080:5000"
+  
+  app-review:
+    image: luisroxis/review:${TAG}
+    hostname: app-review
+    build:
+      context: ../review/src/Review.Web/
+      dockerfile: Dockerfile
+    environment:
+      - ConnectionStrings__MyConnection=${CONNECTION_STRING_PG}
+    networks:
+      - net_db
+      - net_app
+    restart: always
+    depends_on:
+      - postgres
+
+  app-movie:
+    image: luisroxis/movie:${TAG}
+    hostname: app-movie
+    build:
+      context: ../movie/src/
+      dockerfile: Dockerfile
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+    networks:
+      - net_db
+      - net_app
+    restart: always
+    depends_on:
+      - mongodb
